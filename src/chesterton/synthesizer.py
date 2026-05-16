@@ -745,14 +745,14 @@ if __name__ == "__main__":
         print(f"GitHub token loaded: {github_token[:10]}...")
     
     target = CodeTarget(
-        file_path="src/flask/sessions.py",
-        start_line=361,
-        end_line=363,
-        repo_path=r"C:\Users\Oscar\chesterton\flask",
+        file_path="src/werkzeug/security.py",
+        start_line=11,
+        end_line=12,
+        repo_path=r"C:\Users\Oscar\chesterton\werkzeug",
         content=(
-            '                    secure=secure,\n'
-            '                    samesite=samesite,\n'
-            '                    httponly=httponly,'
+            '_os_alt_seps: list[str] = list(\n'
+            '    sep for sep in [os.sep, os.altsep] if sep is not None and sep != "/"\n'
+            ')'
         ),
     )
     
