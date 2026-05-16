@@ -185,6 +185,84 @@ def detect_cross_repo_migration(commits: List[GitCommit]) -> Optional[str]:
 def _get_line_history(repo: Repo, target: CodeTarget) -> List[GitCommit]:
     """Get all commits that touched the target lines using git log -L."""
     try:
+        log_output = repo.git.log(
+            "-L", f"{target.start_line},{target.end_line}:{target.file_path}"
+        )
+        if not log_output:
+            return []
+
+        commits = []
+        lines = log_output.split('\n')
+
+        current_commit = None
+        current_author = None
+        current_date = None
+        message_lines: list[str] = []
+        diff_lines: list[str] = []
+        in_message = False
+        in_diff = False
+
+        def flush():
+            if not current_commit:
+                return
+            commits.append(GitCommit(
+                sha=current_commit,
+                author=current_author or "Unknown",
+                date=current_date or datetime.now(),
+                message="\n".join(l.strip() for l in message_lines).strip(),
+                diff_snippet="\n".join(diff_lines[:20]),
+            ))
+
+        for line in lines:
+            commit_match = re.match(r'^commit ([0-9a-f]{7,40})', line)
+            if commit_match:
+                flush()
+                current_commit = commit_match.group(1)
+                current_author = None
+                current_date = None
+                message_lines = []
+                diff_lines = []
+                in_message = False
+                in_diff = False
+                continue
+
+            if line.startswith('Author:'):
+                current_author = line.split(':', 1)[1].strip()
+                continue
+
+            if line.startswith('Date:'):
+                date_str = line.split(':', 1)[1].strip()
+                try:
+                    current_date = datetime.strptime(date_str, '%a %b %d %H:%M:%S %Y %z')
+                except Exception:
+                    current_date = datetime.now()
+                in_message = True
+                continue
+
+            # Diff section starts — stop collecting message
+            if line.startswith('diff --git') or line.startswith('@@'):
+                in_message = False
+                in_diff = True
+                diff_lines.append(line)
+                continue
+
+            if in_diff:
+                diff_lines.append(line)
+                continue
+
+            if in_message:
+                # Collect ALL message lines (including blanks between paragraphs)
+                # Git indents message body with 4 spaces; strip that in flush().
+                message_lines.append(line)
+                continue
+
+        flush()
+        return commits
+
+    except GitCommandError:
+        return []
+    """Get all commits that touched the target lines using git log -L."""
+    try:
         # Use git log -L to get commits touching specific lines
         # Format: -L start,end:file
         # Pass -L as separate argument for proper parsing
@@ -311,14 +389,14 @@ if __name__ == "__main__":
     # This demonstrates the module against the hero case from demo_cases.md
     
     target = CodeTarget(
-        file_path="src/werkzeug/security.py",
-        start_line=11,  # _os_alt_seps constant
-        end_line=12,
-        repo_path=r"C:\Users\Oscar\chesterton\werkzeug",
+        file_path="src/flask/sessions.py",
+        start_line=361,
+        end_line=363,
+        repo_path=r"C:\Users\Oscar\chesterton\flask",
         content=(
-            '_os_alt_seps: list[str] = list(\n'
-            '    sep for sep in [os.sep, os.altsep] if sep is not None and sep != "/"\n'
-            ')'
+            '                    secure=secure,\n'
+            '                    samesite=samesite,\n'
+            '                    httponly=httponly,'
         ),
     )
     
